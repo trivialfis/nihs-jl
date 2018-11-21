@@ -1,16 +1,38 @@
 #include "json.hh"
 
 namespace json {
-
+namespace {
 class JsonWriter {
+  static constexpr size_t kIndentSize = 2;
+
+  size_t n_spaces_;
+  std::ostream* stream_;
+
  public:
-  JsonWriter() = default;
+  JsonWriter(std::ostream* stream) : n_spaces_{0}, stream_{stream} {}
   ~JsonWriter() = default;
 
-  void Save(Json json, std::istream *stream) {
-    
+  void NewLine() {
+    *stream_ << "\n" << std::string(n_spaces_, ' ');
+  }
+
+  void BeginIndent() {
+    n_spaces_ += kIndentSize;
+  }
+  void EndIndent() {
+    n_spaces_ -= kIndentSize;
+    CHECK_GE(n_spaces_, 0);
+  }
+
+  void Write(std::string str) {
+    *stream_ << str;
+  }
+
+  void Save(Json json) {
+    json.ptr_->Save(this);
   }
 };
+}
 
 class JsonReader {
  private:
@@ -158,6 +180,20 @@ class JsonReader {
     return Parse();
   }
 };
+
+// Value
+std::string Value::TypeStr() const {
+  switch (kind_) {
+    case ValueKind::String: return "String"; break;
+    case ValueKind::Number: return "Number"; break;
+    case ValueKind::Object: return "Object"; break;
+    case ValueKind::Array:  return "Array";  break;
+    case ValueKind::True:   return "True";   break;
+    case ValueKind::False:  return "False";  break;
+    case ValueKind::Null:   return "Null";   break;
+  }
+}
+
 // Json Object
 JsonObject::JsonObject(std::map<std::string, Json> object)
     : Value(ValueKind::Object), object_{std::move(object)} {}
@@ -166,64 +202,148 @@ Json JsonObject::operator[](std::string const & key) {
   return object_.at(key);
 }
 
-Json& CreateNull() {
-  static Json null;
-  return null;
-}
-
 Json JsonObject::operator[](int ind) {
   throw std::runtime_error(
-      "Object of type Json Object can not be indexed by Integer.");
-  return CreateNull();
+      "Object of type " +
+      Value::TypeStr() + " can not be indexed by Integer.");
+  return Json();
+}
+
+void JsonObject::Save(JsonWriter* writer) {
+  writer->Write("{");
+  writer->BeginIndent();
+  writer->NewLine();
+
+  size_t i = 0;
+  size_t size = object_.size();
+
+  for (auto& value : object_) {
+    writer->Write("\"" + value.first + "\": ");
+    writer->Save(value.second);
+    // value.second.Save();
+
+    if (i != size-1) {
+      writer->Write(",");
+      writer->NewLine();
+    }
+    i++;
+  }
+  writer->EndIndent();
+  writer->NewLine();
+  writer->Write("}");
 }
 
 // Json String
 Json JsonString::operator[](std::string const & key) {
   throw std::runtime_error(
-      "Object of type Json String can not be indexed by string.");
-  return CreateNull();
+      "Object of type " +
+      Value::TypeStr() + " can not be indexed by string.");
+  return Json();
 }
 
 Json JsonString::operator[](int ind) {
   return Json(std::move(std::to_string(str_[ind])));
 }
 
+void JsonString::Save(JsonWriter* writer) {
+  std::string buffer;
+  buffer += '"';
+  for (size_t i = 0; i < str_.length(); i++) {
+    const char ch = str_[i];
+    if (ch == '\\') {
+      buffer += "\\\\";
+    } else if (ch == '"') {
+      buffer += "\\\"";
+    } else if (ch == '\b') {
+      buffer += "\\b";
+    } else if (ch == '\f') {
+      buffer += "\\f";
+    } else if (ch == '\n') {
+      buffer += "\\n";
+    } else if (ch == '\r') {
+      buffer += "\\r";
+    } else if (ch == '\t') {
+      buffer += "\\t";
+    } else if (static_cast<uint8_t>(ch) <= 0x1f) {
+      char buf[8];
+      snprintf(buf, sizeof buf, "\\u%04x", ch);
+      buffer += buf;
+    } else if (static_cast<uint8_t>(ch) == 0xe2 && static_cast<uint8_t>(str_[i+1]) == 0x80
+               && static_cast<uint8_t>(str_[i+2]) == 0xa8) {
+      buffer += "\\u2028";
+      i += 2;
+    } else if (static_cast<uint8_t>(ch) == 0xe2 && static_cast<uint8_t>(str_[i+1]) == 0x80
+               && static_cast<uint8_t>(str_[i+2]) == 0xa9) {
+      buffer += "\\u2029";
+      i += 2;
+    } else {
+      buffer += ch;
+    }
+  }
+  buffer += '"';
+  writer->Write(buffer);
+}
+
 // Json Array
 Json JsonArray::operator[](std::string const & key) {
   throw std::runtime_error(
-      "Object of type Json Array can not be indexed by string.");
-  return CreateNull();
+      "Object of type " +
+      Value::TypeStr() + " can not be indexed by string.");
+  return Json();
 }
 
 Json JsonArray::operator[](int ind) {
-  // Json res {std::move()};
   return Json(vec_.at(ind));
+}
+
+void JsonArray::Save(JsonWriter* writer) {
+  writer->Write("[");
+  size_t size = vec_.size();
+  for (size_t i = 0; i < size; ++i) {
+    auto& value = vec_[i];
+    writer->Save(value);
+    // value.Save(writer);
+    if (i != size-1) { writer->Write(", "); }
+  }
+  writer->Write("]");
 }
 
 // Json Number
 Json JsonNumber::operator[](std::string const & key) {
   throw std::runtime_error(
-      "Object of type Json Number can not be indexed by string.");
-  return CreateNull();
+      "Object of type " +
+      Value::TypeStr() + " can not be indexed by string.");
+  return Json();
 }
 
 Json JsonNumber::operator[](int ind) {
   throw std::runtime_error(
-      "Object of type Json Number can not be indexed by Integer.");
-  return CreateNull();
+      "Object of type " +
+      Value::TypeStr() + " can not be indexed by Integer.");
+  return Json();
+}
+
+void JsonNumber::Save(JsonWriter* writer) {
+  writer->Write(std::to_string(this->GetDouble()));
 }
 
 // Json Null
 Json JsonNull::operator[](std::string const & key) {
   throw std::runtime_error(
-      "Object of type Json Null can not be indexed by string.");
-  return CreateNull();
+      "Object of type " +
+      Value::TypeStr() + " can not be indexed by string.");
+  return Json();
 }
 
 Json JsonNull::operator[](int ind) {
   throw std::runtime_error(
-      "Object of type Json Null can not be indexed by Integer.");
-  return CreateNull();
+      "Object of type " +
+      Value::TypeStr() + " can not be indexed by Integer.");
+  return Json();
+}
+
+void JsonNull::Save(JsonWriter* writer) {
+  writer->Write("null");
 }
 
 // Json class
@@ -343,8 +463,13 @@ Json Json::Load(std::istream* stream) {
   }
 }
 
-void Json::Save(std::istream *stream) {
-  throw std::runtime_error("Not implemented");
+void Json::Dump(Json json, std::ostream *stream) {
+  JsonWriter writer(stream);
+  try {
+    writer.Save(json);
+  } catch (std::runtime_error const& e) {
+    std::cerr << e.what();
+  }
 }
 
 }  // namespace json

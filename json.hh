@@ -31,9 +31,6 @@
 
 namespace json {
 
-class Json;
-class Value;
-
 class DebugFunction {
   std::string f;
  public:
@@ -44,21 +41,17 @@ class DebugFunction {
     std::cout << "end   " << f << std::endl;;
   }
 };
+
 #define DEBUG_F auto __debug_f__ = DebugFunction(__PRETTY_FUNCTION__);
+#define CHECK_GE(a, b)                                  \
+  if (!((a) >= (b))) {                                  \
+    throw std::runtime_error("CHECK_GE failed");        \
+  }                                                     \
 
-template <typename T>
-bool IsA(Value* value) {
-  return T::IsClassOf(value);
-}
-
-template <typename T>
-T* Cast(Value* value) {
-  if (IsA<T>(value)) {
-    return dynamic_cast<T*>(value);
-  } else {
-    throw std::runtime_error("Invalid cast.");
-  }
-}
+class Json;
+namespace {
+class JsonWriter;
+};  // namespace
 
 class Value {
  protected:
@@ -80,21 +73,28 @@ class Value {
   ValueKind Type() const { return kind_; }
   virtual ~Value() = default;
 
+  virtual void Save(JsonWriter* stream) = 0;
+
   virtual Json operator[](std::string const & key) = 0;
   virtual Json operator[](int ind) = 0;
 
-  std::string TypeStr() const {
-    switch (kind_) {
-      case ValueKind::String: return "String"; break;
-      case ValueKind::Number: return "Number"; break;
-      case ValueKind::Object: return "Object"; break;
-      case ValueKind::Array:  return "Array";  break;
-      case ValueKind::True:   return "True";   break;
-      case ValueKind::False:  return "False";  break;
-      case ValueKind::Null:   return "Null";   break;
-    }
-  }
+  std::string TypeStr() const;
 };
+
+template <typename T>
+bool IsA(Value* value) {
+  return T::IsClassOf(value);
+}
+
+template <typename T>
+T* Cast(Value* value) {
+  if (IsA<T>(value)) {
+    return dynamic_cast<T*>(value);
+  } else {
+    throw std::runtime_error(
+        "Invalid cast, value is a " + value->TypeStr());
+  }
+}
 
 class JsonString : public Value {
   std::string str_;
@@ -102,6 +102,8 @@ class JsonString : public Value {
   JsonString() : Value(ValueKind::String) {}
   JsonString(std::string&& str) :
       Value(ValueKind::String), str_{std::move(str)} {}
+
+  virtual void Save(JsonWriter* stream);
 
   virtual Json operator[](std::string const & key);
   virtual Json operator[](int ind);
@@ -121,6 +123,8 @@ class JsonArray : public Value {
   JsonArray(std::vector<Json>&& arr) :
       Value(ValueKind::Array), vec_{std::move(arr)} {}
 
+  virtual void Save(JsonWriter* stream);
+
   virtual Json operator[](std::string const & key);
   virtual Json operator[](int ind);
 
@@ -134,9 +138,12 @@ class JsonArray : public Value {
 
 class JsonObject : public Value {
   std::map<std::string, Json> object_;
+
  public:
   JsonObject() : Value(ValueKind::Object) {}
   JsonObject(std::map<std::string, Json> object);
+
+  virtual void Save(JsonWriter* writer);
 
   virtual Json operator[](std::string const & key);
   virtual Json operator[](int ind);
@@ -147,26 +154,16 @@ class JsonObject : public Value {
 };
 
 class JsonNumber : public Value {
-  union Number {
-    int    Int;
-    double Double;
-    float  Float;
-  } number_;
+  double number_;
  public:
   JsonNumber() : Value(ValueKind::Number) {}
   JsonNumber(double value) : Value(ValueKind::Number) {
-    number_.Double = value;
-  }
-  JsonNumber(float value) : Value(ValueKind::Number) {
-    number_.Float = value;
-  }
-  JsonNumber(int value) : Value(ValueKind::Number) {
-    number_.Int = value;
+    number_ = value;
   }
 
-  int GetInteger() const { return number_.Int; }
-  double GetDouble() const { return number_.Double; }
-  float GetFloat() const { return number_.Float; }
+  double GetDouble() const { return number_; }
+
+  virtual void Save(JsonWriter* stream);
 
   virtual Json operator[](std::string const & key);
   virtual Json operator[](int ind);
@@ -181,6 +178,8 @@ class JsonNull : public Value {
   JsonNull() : Value(ValueKind::Null) {}
   JsonNull(std::nullptr_t) : Value(ValueKind::Null) {}
 
+  virtual void Save(JsonWriter* stream);
+
   virtual Json operator[](std::string const & key);
   virtual Json operator[](int ind);
 
@@ -190,9 +189,14 @@ class JsonNull : public Value {
 };
 
 class Json {
+  friend JsonWriter;
+  void Save(JsonWriter* writer) {
+    this->ptr_->Save(writer);
+  }
+
  public:
   static Json Load(std::istream* stream);
-  static void Save(std::istream* stream);
+  static void Dump(Json json, std::ostream* stream);
 
   Json() : ptr_{new JsonNull} {}
   explicit Json(std::map<std::string, Json>&& object) :
