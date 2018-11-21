@@ -4,7 +4,7 @@
 #define LOG std::cout << __FILE__ << ", " << __LINE__ << ": "
 #define L(CONTENT)                                      \
   std::cout << __FILE__ << ", " << __LINE__ << ": "     \
-  << CONTENT << std::endl;
+  << CONTENT << '|' << std::endl;                       \
 
 /*!
  * \brief Unicode
@@ -67,12 +67,15 @@ class Value {
 
  public:
   Value(ValueKind _kind) : kind_{_kind} {}
+  // Value(Value const& other) : kind_{other.kind_} {}
+  // Value(Value&& other) : kind_{other.kind_} {}
+
   ValueKind Type() const { return kind_; }
   virtual ~Value() = default;
 
   virtual void Save(JsonWriter* stream) = 0;
 
-  virtual Json operator[](std::string const & key) = 0;
+  virtual Json& operator[](std::string const & key) = 0;
   virtual Json operator[](int ind) = 0;
 
   std::string TypeStr() const;
@@ -89,7 +92,7 @@ T* Cast(Value* value) {
     return dynamic_cast<T*>(value);
   } else {
     throw std::runtime_error(
-        "Invalid cast, value is a " + value->TypeStr());
+        "Invalid cast, from " + value->TypeStr() + " to " + T().TypeStr());
   }
 }
 
@@ -104,7 +107,7 @@ class JsonString : public Value {
 
   virtual void Save(JsonWriter* stream);
 
-  virtual Json operator[](std::string const & key);
+  virtual Json& operator[](std::string const & key);
   virtual Json operator[](int ind);
 
   std::string const& GetString() const { return str_; }
@@ -121,10 +124,12 @@ class JsonArray : public Value {
   JsonArray() : Value(ValueKind::Array) {}
   JsonArray(std::vector<Json>&& arr) :
       Value(ValueKind::Array), vec_{std::move(arr)} {}
+  JsonArray(std::vector<Json> const& arr) :
+      Value(ValueKind::Array), vec_{arr} {}
 
   virtual void Save(JsonWriter* stream);
 
-  virtual Json operator[](std::string const & key);
+  virtual Json& operator[](std::string const & key);
   virtual Json operator[](int ind);
 
   std::vector<Json> const& GetArray() const { return vec_; }
@@ -144,7 +149,7 @@ class JsonObject : public Value {
 
   virtual void Save(JsonWriter* writer);
 
-  virtual Json operator[](std::string const & key);
+  virtual Json& operator[](std::string const & key);
   virtual Json operator[](int ind);
 
   static bool IsClassOf(Value* value) {
@@ -164,7 +169,7 @@ class JsonNumber : public Value {
 
   virtual void Save(JsonWriter* stream);
 
-  virtual Json operator[](std::string const & key);
+  virtual Json& operator[](std::string const & key);
   virtual Json operator[](int ind);
 
   static bool IsClassOf(Value* value) {
@@ -179,7 +184,7 @@ class JsonNull : public Value {
 
   virtual void Save(JsonWriter* stream);
 
-  virtual Json operator[](std::string const & key);
+  virtual Json& operator[](std::string const & key);
   virtual Json operator[](int ind);
 
   static bool IsClassOf(Value* value) {
@@ -201,7 +206,7 @@ class JsonBoolean : public Value {
 
   virtual void Save(JsonWriter* writer);
 
-  virtual Json operator[](std::string const & key);
+  virtual Json& operator[](std::string const & key);
   virtual Json operator[](int ind);
 
   bool GetBoolean() { return boolean_; }
@@ -234,6 +239,7 @@ class Json {
       ptr_{new JsonArray(std::move(list))}{}
   Json& operator=(JsonArray array) {
     ptr_.reset(new JsonArray(std::move(array)));
+    // L("Assignment: " << ptr_->TypeStr());
     return *this;
   }
   // object
@@ -247,7 +253,9 @@ class Json {
   explicit Json(JsonString str) :
       ptr_{new JsonString(std::move(str))} {}
   Json& operator=(JsonString str) {
+    // L(str.TypeStr());
     ptr_.reset(new JsonString(std::move(str)));
+    // L(ptr_->TypeStr());
     return *this;
   }
   // bool
@@ -266,27 +274,47 @@ class Json {
   }
 
   // copy
-  Json(Json const& other) : ptr_{other.ptr_} {}
+  Json(Json const& other) : ptr_{other.ptr_} {
+    // if (ptr_->TypeStr() == "Null") {
+    //   throw std::runtime_error("Copy null.");
+    // }
+    // L("Assignment Other: " << other.ptr_->TypeStr());
+    // L("Assignment: " << ptr_->TypeStr());
+  }
   Json& operator=(Json const& other) {
     ptr_ = other.ptr_;
+    // L("Assignment: " << ptr_->TypeStr());
     return *this;
   }
   // move
-  Json(Json&& other) : ptr_{std::move(other.ptr_)} {}
+  Json(Json&& other) : ptr_{std::move(other.ptr_)} {
+    // L("Assignment: " << ptr_->TypeStr());
+  }
   Json& operator=(Json&& other) {
     ptr_ = std::move(other.ptr_);
+    // L("Assignment: " << ptr_->TypeStr());
     return *this;
   }
 
-  Json operator[](std::string const & key) const { return (*ptr_)[key]; }
+  Json& operator[](std::string const & key) const {
+    // L(ptr_->TypeStr());
+    return (*ptr_)[key];
+  }
   Json operator[](int ind)                 const { return (*ptr_)[ind]; }
 
   Value& GetValue() {
+    // L("Get value:" << ptr_->TypeStr());
     return *ptr_;
   }
 
  private:
   std::shared_ptr<Value> ptr_;
 };
+
+template <typename T>
+T Get(Json json) {
+  auto value = *Cast<T>(&json.GetValue());
+  return value;
+}
 }      // namespace json
 #endif  // JSON_HH_
