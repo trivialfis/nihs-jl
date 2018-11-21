@@ -198,23 +198,20 @@ JsonObject::JsonObject(std::map<std::string, Json> object)
     : Value(ValueKind::Object), object_{std::move(object)} {}
 
 Json& JsonObject::operator[](std::string const & key) {
-  if (object_.find(key) == object_.end()) {
-    // L(key << " not found");
-    auto result = object_[key];
-    // L(result.GetValue().TypeStr());
-  } else {
-    L(key << " found");
-    auto result = object_.at(key);
-    L(result.GetValue().TypeStr());
-  }
   return object_[key];
 }
 
-Json JsonObject::operator[](int ind) {
+// Used to keep some compilers happy about non-reaching return statement.
+Json& DummyJsonObject () {
+  static Json obj;
+  return obj;
+}
+
+Json& JsonObject::operator[](int ind) {
   throw std::runtime_error(
       "Object of type " +
       Value::TypeStr() + " can not be indexed by Integer.");
-  return Json();
+  return DummyJsonObject();
 }
 
 void JsonObject::Save(JsonWriter* writer) {
@@ -228,7 +225,6 @@ void JsonObject::Save(JsonWriter* writer) {
   for (auto& value : object_) {
     writer->Write("\"" + value.first + "\": ");
     writer->Save(value.second);
-    // value.second.Save();
 
     if (i != size-1) {
       writer->Write(",");
@@ -246,11 +242,14 @@ Json& JsonString::operator[](std::string const & key) {
   throw std::runtime_error(
       "Object of type " +
       Value::TypeStr() + " can not be indexed by string.");
-  // return Json();
+  return DummyJsonObject();
 }
 
-Json JsonString::operator[](int ind) {
-  return Json(std::move(std::to_string(str_[ind])));
+Json& JsonString::operator[](int ind) {
+  throw std::runtime_error(
+      "Object of type " +
+      Value::TypeStr() + " can not be indexed by Integer, " +
+      "please try obtaining std::string first.");
 }
 
 void JsonString::Save(JsonWriter* writer) {
@@ -297,11 +296,11 @@ Json& JsonArray::operator[](std::string const & key) {
   throw std::runtime_error(
       "Object of type " +
       Value::TypeStr() + " can not be indexed by string.");
-  // return Json();
+  return DummyJsonObject();
 }
 
-Json JsonArray::operator[](int ind) {
-  return Json(vec_.at(ind));
+Json& JsonArray::operator[](int ind) {
+  return vec_.at(ind);
 }
 
 void JsonArray::Save(JsonWriter* writer) {
@@ -310,7 +309,6 @@ void JsonArray::Save(JsonWriter* writer) {
   for (size_t i = 0; i < size; ++i) {
     auto& value = vec_[i];
     writer->Save(value);
-    // value.Save(writer);
     if (i != size-1) { writer->Write(", "); }
   }
   writer->Write("]");
@@ -321,14 +319,14 @@ Json& JsonNumber::operator[](std::string const & key) {
   throw std::runtime_error(
       "Object of type " +
       Value::TypeStr() + " can not be indexed by string.");
-  // return Json();
+  return DummyJsonObject();
 }
 
-Json JsonNumber::operator[](int ind) {
+Json& JsonNumber::operator[](int ind) {
   throw std::runtime_error(
       "Object of type " +
       Value::TypeStr() + " can not be indexed by Integer.");
-  return Json();
+  return DummyJsonObject();
 }
 
 void JsonNumber::Save(JsonWriter* writer) {
@@ -340,14 +338,14 @@ Json& JsonNull::operator[](std::string const & key) {
   throw std::runtime_error(
       "Object of type " +
       Value::TypeStr() + " can not be indexed by string.");
-  // return Json();
+  return DummyJsonObject();
 }
 
-Json JsonNull::operator[](int ind) {
+Json& JsonNull::operator[](int ind) {
   throw std::runtime_error(
       "Object of type " +
       Value::TypeStr() + " can not be indexed by Integer.");
-  return Json();
+  return DummyJsonObject();
 }
 
 void JsonNull::Save(JsonWriter* writer) {
@@ -359,14 +357,15 @@ Json& JsonBoolean::operator[](std::string const & key) {
   throw std::runtime_error(
       "Object of type " +
       Value::TypeStr() + " can not be indexed by string.");
-  // return Json();
+  return DummyJsonObject();
 }
-Json JsonBoolean::operator[](int ind) {
+Json& JsonBoolean::operator[](int ind) {
   throw std::runtime_error(
       "Object of type " +
       Value::TypeStr() + " can not be indexed by Integer.");
-  return Json();
+  return DummyJsonObject();
 }
+
 void JsonBoolean::Save(JsonWriter *writer) {
   if (boolean_) {
     writer->Write("true");
@@ -394,8 +393,8 @@ Json JsonReader::ParseString() {
   while (true) {
     ch = GetNextChar();
     if (ch == '\\') {
-      char sch = static_cast<char>(GetNextChar());
-      switch (sch) {
+      char next = static_cast<char>(GetNextChar());
+      switch (next) {
         case 'r': str += "\r"; break;
         case 'n': str += "\n"; break;
         case '\\': str += "\\"; break;
@@ -425,7 +424,6 @@ Json JsonReader::ParseArray() {
       return std::move(Json(std::move(data)));
     }
     auto obj = Parse();
-    // L("obj.Type: " << obj.GetValue().TypeStr());
     data.push_back(obj);
     ch = GetNextNonSpaceChar();
     if (ch == ']') break;

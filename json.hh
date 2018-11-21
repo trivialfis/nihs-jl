@@ -67,8 +67,6 @@ class Value {
 
  public:
   Value(ValueKind _kind) : kind_{_kind} {}
-  // Value(Value const& other) : kind_{other.kind_} {}
-  // Value(Value&& other) : kind_{other.kind_} {}
 
   ValueKind Type() const { return kind_; }
   virtual ~Value() = default;
@@ -76,7 +74,7 @@ class Value {
   virtual void Save(JsonWriter* stream) = 0;
 
   virtual Json& operator[](std::string const & key) = 0;
-  virtual Json operator[](int ind) = 0;
+  virtual Json& operator[](int ind) = 0;
 
   std::string TypeStr() const;
 };
@@ -108,7 +106,7 @@ class JsonString : public Value {
   virtual void Save(JsonWriter* stream);
 
   virtual Json& operator[](std::string const & key);
-  virtual Json operator[](int ind);
+  virtual Json& operator[](int ind);
 
   std::string const& GetString() const { return str_; }
   std::string & GetString() { return str_;}
@@ -130,7 +128,7 @@ class JsonArray : public Value {
   virtual void Save(JsonWriter* stream);
 
   virtual Json& operator[](std::string const & key);
-  virtual Json operator[](int ind);
+  virtual Json& operator[](int ind);
 
   std::vector<Json> const& GetArray() const { return vec_; }
   std::vector<Json> & GetArray() { return vec_; }
@@ -150,7 +148,7 @@ class JsonObject : public Value {
   virtual void Save(JsonWriter* writer);
 
   virtual Json& operator[](std::string const & key);
-  virtual Json operator[](int ind);
+  virtual Json& operator[](int ind);
 
   static bool IsClassOf(Value* value) {
     return value->Type() == ValueKind::Object;
@@ -170,7 +168,7 @@ class JsonNumber : public Value {
   virtual void Save(JsonWriter* stream);
 
   virtual Json& operator[](std::string const & key);
-  virtual Json operator[](int ind);
+  virtual Json& operator[](int ind);
 
   static bool IsClassOf(Value* value) {
     return value->Type() == ValueKind::Number;
@@ -185,7 +183,7 @@ class JsonNull : public Value {
   virtual void Save(JsonWriter* stream);
 
   virtual Json& operator[](std::string const & key);
-  virtual Json operator[](int ind);
+  virtual Json& operator[](int ind);
 
   static bool IsClassOf(Value* value) {
     return value->Type() == ValueKind::Null;
@@ -207,7 +205,7 @@ class JsonBoolean : public Value {
   virtual void Save(JsonWriter* writer);
 
   virtual Json& operator[](std::string const & key);
-  virtual Json operator[](int ind);
+  virtual Json& operator[](int ind);
 
   bool GetBoolean() { return boolean_; }
 
@@ -274,38 +272,22 @@ class Json {
   }
 
   // copy
-  Json(Json const& other) : ptr_{other.ptr_} {
-    // if (ptr_->TypeStr() == "Null") {
-    //   throw std::runtime_error("Copy null.");
-    // }
-    // L("Assignment Other: " << other.ptr_->TypeStr());
-    // L("Assignment: " << ptr_->TypeStr());
-  }
+  Json(Json const& other) : ptr_{other.ptr_} {}
   Json& operator=(Json const& other) {
     ptr_ = other.ptr_;
-    // L("Assignment: " << ptr_->TypeStr());
     return *this;
   }
   // move
-  Json(Json&& other) : ptr_{std::move(other.ptr_)} {
-    // L("Assignment: " << ptr_->TypeStr());
-  }
+  Json(Json&& other) : ptr_{std::move(other.ptr_)} {}
   Json& operator=(Json&& other) {
     ptr_ = std::move(other.ptr_);
-    // L("Assignment: " << ptr_->TypeStr());
     return *this;
   }
 
-  Json& operator[](std::string const & key) const {
-    // L(ptr_->TypeStr());
-    return (*ptr_)[key];
-  }
-  Json operator[](int ind)                 const { return (*ptr_)[ind]; }
+  Json& operator[](std::string const & key) const { return (*ptr_)[key]; }
+  Json& operator[](int ind)                 const { return (*ptr_)[ind]; }
 
-  Value& GetValue() {
-    // L("Get value:" << ptr_->TypeStr());
-    return *ptr_;
-  }
+  Value& GetValue() { return *ptr_; }
 
  private:
   std::shared_ptr<Value> ptr_;
