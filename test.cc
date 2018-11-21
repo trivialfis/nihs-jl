@@ -1,6 +1,7 @@
 #include "json.hh"
 
 #include <fstream>
+#include <map>
 
 using namespace json;
 
@@ -223,7 +224,14 @@ bool TestLoadDump() {
 bool TestAssigningObjects() {
   Json json;
   json = JsonObject();
-  json["ok"] = "Not ok";
+  json["ok"] = std::string("Not ok");
+  json["no ok"] = JsonArray();
+
+  std::map<std::string, Json> objects;
+  Json json_objects;
+  json_objects["tree_parameters"] = JsonArray();
+  json_objects["tree_parameters"].GetValue();
+  return true;
 }
 
 int main(int argc, char * const argv[]) {
@@ -235,4 +243,6 @@ int main(int argc, char * const argv[]) {
   TEST(TestIndexing);
 
   TEST(TestLoadDump);
+
+  TEST(TestAssigningObjects);
 }

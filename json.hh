@@ -49,9 +49,7 @@ class DebugFunction {
   }                                                     \
 
 class Json;
-namespace {
 class JsonWriter;
-};  // namespace
 
 class Value {
  protected:
@@ -60,8 +58,7 @@ class Value {
     Number,
     Object,  // std::map
     Array,   // std::vector, std::list, std::array
-    True,
-    False,
+    Boolean,
     Null
   };
 
@@ -100,6 +97,8 @@ class JsonString : public Value {
   std::string str_;
  public:
   JsonString() : Value(ValueKind::String) {}
+  JsonString(std::string const& str) :
+      Value(ValueKind::String), str_{str} {}
   JsonString(std::string&& str) :
       Value(ValueKind::String), str_{std::move(str)} {}
 
@@ -188,6 +187,30 @@ class JsonNull : public Value {
   }
 };
 
+class JsonBoolean : public Value {
+  bool boolean_;
+ public:
+  JsonBoolean() : Value(ValueKind::Boolean) {}
+  // Ambigious with JsonNumber.
+  template <typename Bool,
+            typename std::enable_if<
+              std::is_same<Bool, bool>::value ||
+              std::is_same<Bool, bool const>::value>::type* = nullptr>
+  JsonBoolean(Bool value) :
+      Value(ValueKind::Boolean), boolean_{value} {}
+
+  virtual void Save(JsonWriter* writer);
+
+  virtual Json operator[](std::string const & key);
+  virtual Json operator[](int ind);
+
+  bool GetBoolean() { return boolean_; }
+
+  static bool IsClassOf(Value* value) {
+    return value->Type() == ValueKind::Boolean;
+  }
+};
+
 class Json {
   friend JsonWriter;
   void Save(JsonWriter* writer) {
@@ -199,32 +222,64 @@ class Json {
   static void Dump(Json json, std::ostream* stream);
 
   Json() : ptr_{new JsonNull} {}
-  explicit Json(std::map<std::string, Json>&& object) :
-      ptr_{new JsonObject(std::move(object))} {}
-  explicit Json(std::vector<Json>&& list) :
+
+  // number
+  explicit Json(JsonNumber number)    : ptr_{new JsonNumber(number)} {}
+  Json& operator=(JsonNumber number) {
+    ptr_.reset(new JsonNumber(std::move(number)));
+    return *this;
+  }
+  // array
+  explicit Json(JsonArray list) :
       ptr_{new JsonArray(std::move(list))}{}
-  explicit Json(std::string&& str) :
-      ptr_(new JsonString(std::move(str))) {}
-  explicit Json(double d) : ptr_{new JsonNumber(d)} {}
-  explicit Json(float f)  : ptr_{new JsonNumber(f)} {}
-  explicit Json(int i)    : ptr_{new JsonNumber(i)} {}
+  Json& operator=(JsonArray array) {
+    ptr_.reset(new JsonArray(std::move(array)));
+    return *this;
+  }
+  // object
+  explicit Json(JsonObject object) :
+      ptr_{new JsonObject(std::move(object))} {}
+  Json& operator=(JsonObject object) {
+    ptr_.reset(new JsonObject(std::move(object)));
+    return *this;
+  }
+  // string
+  explicit Json(JsonString str) :
+      ptr_{new JsonString(std::move(str))} {}
+  Json& operator=(JsonString str) {
+    ptr_.reset(new JsonString(std::move(str)));
+    return *this;
+  }
+  // bool
+  explicit Json(JsonBoolean boolean) :
+      ptr_{new JsonBoolean(std::move(boolean))} {}
+  Json& operator=(JsonBoolean boolean) {
+    ptr_.reset(new JsonBoolean(std::move(boolean)));
+    return *this;
+  }
+  // null
+  explicit Json(JsonNull null) :
+      ptr_{new JsonNull(std::move(null))} {}
+  Json& operator=(JsonNull null) {
+    ptr_.reset(new JsonNull(std::move(null)));
+    return *this;
+  }
 
+  // copy
   Json(Json const& other) : ptr_{other.ptr_} {}
-  Json(Json&& other) : ptr_{std::move(other.ptr_)} {}
-
   Json& operator=(Json const& other) {
     ptr_ = other.ptr_;
     return *this;
   }
-
+  // move
+  Json(Json&& other) : ptr_{std::move(other.ptr_)} {}
   Json& operator=(Json&& other) {
     ptr_ = std::move(other.ptr_);
     return *this;
   }
 
-  Json operator[](std::string const & key) {
-    return (*ptr_)[key];
-  }
+  Json operator[](std::string const & key) const { return (*ptr_)[key]; }
+  Json operator[](int ind)                 const { return (*ptr_)[ind]; }
 
   Value& GetValue() {
     return *ptr_;

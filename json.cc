@@ -1,7 +1,7 @@
 #include "json.hh"
 
 namespace json {
-namespace {
+
 class JsonWriter {
   static constexpr size_t kIndentSize = 2;
 
@@ -32,21 +32,20 @@ class JsonWriter {
     json.ptr_->Save(this);
   }
 };
-}
 
 class JsonReader {
  private:
   struct SourceLocation {
-    int cl_;  // current line
-    int cc_;  // current column
-    int pos_; // current position in raw_str_
+    int cl_;      // current line
+    int cc_;      // current column
+    size_t pos_;  // current position in raw_str_
 
    public:
     SourceLocation() : cl_(0), cc_(0), pos_(0) {}
 
     int Line() const { return cl_;  }
     int Col()  const { return cc_;  }
-    int Pos()  const { return pos_; }
+    size_t Pos()  const { return pos_; }
 
     SourceLocation& Forward(char c=0) {
       if (c == '\n') {
@@ -184,14 +183,14 @@ class JsonReader {
 // Value
 std::string Value::TypeStr() const {
   switch (kind_) {
-    case ValueKind::String: return "String"; break;
-    case ValueKind::Number: return "Number"; break;
-    case ValueKind::Object: return "Object"; break;
-    case ValueKind::Array:  return "Array";  break;
-    case ValueKind::True:   return "True";   break;
-    case ValueKind::False:  return "False";  break;
-    case ValueKind::Null:   return "Null";   break;
+    case ValueKind::String: return "String";  break;
+    case ValueKind::Number: return "Number";  break;
+    case ValueKind::Object: return "Object";  break;
+    case ValueKind::Array:  return "Array";   break;
+    case ValueKind::Boolean:return "Boolean"; break;
+    case ValueKind::Null:   return "Null";    break;
   }
+  return "";
 }
 
 // Json Object
@@ -199,7 +198,7 @@ JsonObject::JsonObject(std::map<std::string, Json> object)
     : Value(ValueKind::Object), object_{std::move(object)} {}
 
 Json JsonObject::operator[](std::string const & key) {
-  return object_.at(key);
+  return object_[key];
 }
 
 Json JsonObject::operator[](int ind) {
@@ -344,6 +343,27 @@ Json JsonNull::operator[](int ind) {
 
 void JsonNull::Save(JsonWriter* writer) {
   writer->Write("null");
+}
+
+// Json Boolean
+Json JsonBoolean::operator[](std::string const & key) {
+  throw std::runtime_error(
+      "Object of type " +
+      Value::TypeStr() + " can not be indexed by string.");
+  return Json();
+}
+Json JsonBoolean::operator[](int ind) {
+  throw std::runtime_error(
+      "Object of type " +
+      Value::TypeStr() + " can not be indexed by Integer.");
+  return Json();
+}
+void JsonBoolean::Save(JsonWriter *writer) {
+  if (boolean_) {
+    writer->Write("true");
+  } else {
+    writer->Write("false");
+  }
 }
 
 // Json class
