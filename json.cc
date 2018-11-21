@@ -120,6 +120,7 @@ class JsonReader {
     throw std::runtime_error(msg);
   }
 
+  // Report expected character
   void Expect(char c) {
     std::string msg = "\nAt ("
                       + std::to_string(cursor_.Line()) + ", "
@@ -129,6 +130,8 @@ class JsonReader {
     Error(msg);
   }
 
+  // FIXME: Maybe remove this.
+  // Report expected set of possibile characters
   void Expect(std::vector<char> expectations) {
     std::stringstream strstream;
     strstream << "\nAt ("
@@ -201,7 +204,8 @@ Json& JsonObject::operator[](std::string const & key) {
   return object_[key];
 }
 
-// Used to keep some compilers happy about non-reaching return statement.
+// Only used for keeping old compilers happy about non-reaching return
+// statement.
 Json& DummyJsonObject () {
   static Json obj;
   return obj;
@@ -250,6 +254,7 @@ Json& JsonString::operator[](int ind) {
       "Object of type " +
       Value::TypeStr() + " can not be indexed by Integer, " +
       "please try obtaining std::string first.");
+  return DummyJsonObject();
 }
 
 void JsonString::Save(JsonWriter* writer) {
@@ -400,8 +405,7 @@ Json JsonReader::ParseString() {
         case '\\': str += "\\"; break;
         case 't': str += "\t"; break;
         case '\"': str += "\"";; break;
-        default:
-          Error();
+        default: Error();
       }
     } else {
       if (ch == '\"') break;

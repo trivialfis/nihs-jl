@@ -16,6 +16,15 @@ using namespace json;
     }                                                           \
   }
 
+#define ASSERT_EQ(a, b)                         \
+  do {                                          \
+    if ((a) != (b)) {                           \
+      return false;                             \
+    } else {                                    \
+      return true;                              \
+    }                                           \
+  } while(0)
+
 std::string GetModelStr() {
   std::string model_json = R"json(
 {
@@ -227,12 +236,12 @@ bool TestLoadDump() {
 bool TestAssigningObjects() {
   bool result = true;
 
-  // {
-  //   Json json;
-  //   json = JsonObject();
-  //   json["ok"] = std::string("Not ok");
-  //   json["no ok"] = JsonArray();
-  // }
+  {
+    Json json;
+    json = JsonObject();
+    json["ok"] = std::string("Not ok");
+    json["no ok"] = JsonArray();
+  }
 
   {
     std::map<std::string, Json> objects;
@@ -249,8 +258,12 @@ bool TestAssigningObjects() {
     auto str = JsonString("1");
     auto& k = json_object["1"];
     k  = str;
-    auto m = json_object["1"];
-    result = Get<JsonString>(json_object["1"]).GetString() == "1";
+    auto& m = json_object["1"];
+    std::string value = Get<JsonString>(m).GetString();
+    result = result && value == "1";
+    result =
+        result &&
+        Get<JsonString>(json_object["1"]).GetString() == "1" ? true : false;
   }
 
   return result;

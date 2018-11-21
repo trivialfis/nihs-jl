@@ -1,4 +1,6 @@
 ((cmake-mode
   (require-final-newline . nil))
- (emacs-lisp-mode
+ (c++-mode
+  (require-final-newline . nil))
+ (org-mode
   (require-final-newline . nil)))

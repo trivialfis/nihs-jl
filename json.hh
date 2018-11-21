@@ -53,6 +53,7 @@ class JsonWriter;
 
 class Value {
  protected:
+  /*!\brief Simplified implementation of LLVM RTTI. */
   enum class ValueKind {
     String,
     Number,
@@ -150,6 +151,9 @@ class JsonObject : public Value {
   virtual Json& operator[](std::string const & key);
   virtual Json& operator[](int ind);
 
+  std::map<std::string, Json> const& GetObject() const { return object_; }
+  std::map<std::string, Json> &      GetObject() { return object_; }
+
   static bool IsClassOf(Value* value) {
     return value->Type() == ValueKind::Object;
   }
@@ -157,6 +161,7 @@ class JsonObject : public Value {
 
 class JsonNumber : public Value {
   double number_;
+
  public:
   JsonNumber() : Value(ValueKind::Number) {}
   JsonNumber(double value) : Value(ValueKind::Number) {
@@ -169,6 +174,8 @@ class JsonNumber : public Value {
 
   virtual Json& operator[](std::string const & key);
   virtual Json& operator[](int ind);
+
+  double GetNumber() const { return number_; }
 
   static bool IsClassOf(Value* value) {
     return value->Type() == ValueKind::Number;
@@ -190,6 +197,7 @@ class JsonNull : public Value {
   }
 };
 
+/*! \brief Describes both true and false. */
 class JsonBoolean : public Value {
   bool boolean_;
  public:
@@ -214,6 +222,9 @@ class JsonBoolean : public Value {
   }
 };
 
+/*!
+ * \brief Data structure representing JSON format.
+ */
 class Json {
   friend JsonWriter;
   void Save(JsonWriter* writer) {
@@ -221,13 +232,15 @@ class Json {
   }
 
  public:
+  /*! \brief Load a Json file from stream. */
   static Json Load(std::istream* stream);
+  /*! \brief Dump json into stream. */
   static void Dump(Json json, std::ostream* stream);
 
   Json() : ptr_{new JsonNull} {}
 
   // number
-  explicit Json(JsonNumber number)    : ptr_{new JsonNumber(number)} {}
+  explicit Json(JsonNumber number) : ptr_{new JsonNumber(number)} {}
   Json& operator=(JsonNumber number) {
     ptr_.reset(new JsonNumber(std::move(number)));
     return *this;
@@ -237,7 +250,6 @@ class Json {
       ptr_{new JsonArray(std::move(list))}{}
   Json& operator=(JsonArray array) {
     ptr_.reset(new JsonArray(std::move(array)));
-    // L("Assignment: " << ptr_->TypeStr());
     return *this;
   }
   // object
@@ -251,9 +263,7 @@ class Json {
   explicit Json(JsonString str) :
       ptr_{new JsonString(std::move(str))} {}
   Json& operator=(JsonString str) {
-    // L(str.TypeStr());
     ptr_.reset(new JsonString(std::move(str)));
-    // L(ptr_->TypeStr());
     return *this;
   }
   // bool
@@ -284,15 +294,26 @@ class Json {
     return *this;
   }
 
+  /*! \brief Index Json object with a std::string, used for Json Object. */
   Json& operator[](std::string const & key) const { return (*ptr_)[key]; }
+  /*! \brief Index Json object with int, used for Json Array. */
   Json& operator[](int ind)                 const { return (*ptr_)[ind]; }
 
+  /*! \Brief Return the reference to stored Json value. */
   Value& GetValue() { return *ptr_; }
 
  private:
   std::shared_ptr<Value> ptr_;
 };
 
+/*!
+ * \brief Get Json value.
+ *
+ * \tparam T One of the Json value type.
+ *
+ * \param json
+ * \return Json value with type T.
+ */
 template <typename T>
 T Get(Json json) {
   auto value = *Cast<T>(&json.GetValue());
