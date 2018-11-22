@@ -3,27 +3,9 @@
 #include <fstream>
 #include <map>
 
+#include <gtest/gtest.h>
+
 using namespace json;
-
-#define TEST(name)                                              \
-  {                                                             \
-    std::cout   << "Run:  " << # name << std::endl;             \
-    bool result = (name)();                                     \
-    if (result) {                                               \
-      std::cout << "Pass: " << # name << "\n" << std::endl;     \
-    } else {                                                    \
-      std::cout << "Failed: " << # name << "\n" << std::endl;   \
-    }                                                           \
-  }
-
-#define ASSERT_EQ(a, b)                         \
-  do {                                          \
-    if ((a) != (b)) {                           \
-      return false;                             \
-    } else {                                    \
-      return true;                              \
-    }                                           \
-  } while(0)
 
 std::string GetModelStr() {
   std::string model_json = R"json(
@@ -149,21 +131,20 @@ std::string GetModelStr() {
   return model_json;
 }
 
-bool TestParseObject() {
+TEST(Json, TestParseObject) {
   std::string str = "{\"TreeParam\" : {\"num_feature\": \"10\"}}";
   std::istringstream iss(str);
   auto json = json::Json::Load(&iss);
-  return true;
 }
 
-bool TestParseNumber() {
+TEST(Json, ParseNumber) {
   std::string str = "31.8892";
   std::istringstream iss(str);
-  json::Json::Load(&iss);
-  return true;
+  auto json = json::Json::Load(&iss);
+  ASSERT_EQ(Get<JsonNumber>(json).GetNumber(), 31.8892);
 }
 
-bool TestParseArray() {
+TEST(Json, ParseArray) {
   std::string str = R"json(
 {
     "nodes": [
@@ -193,21 +174,36 @@ bool TestParseArray() {
 )json";
   std::istringstream iss(str);
   json::Json::Load(&iss);
-  return true;
 }
 
-bool TestEmptyArray() {
+TEST(Json, EmptyArray) {
   std::string str = R"json(
 {
   "leaf_vector": []
 }
 )json";
   std::istringstream iss(str);
-  json::Json::Load(&iss);
-  return true;
+  auto json = json::Json::Load(&iss);
+  auto arr = Get<JsonArray>(json["leaf_vector"]).GetArray();
+  ASSERT_EQ(arr.size(), 0);
 }
 
-bool TestIndexing() {
+TEST(Json, Boolean) {
+  std::string str = R"json(
+{
+  "left_child": true,
+  "right_child": false
+}
+)json";
+  std::stringstream ss(str);
+  Json j {json::Json::Load(&ss)};
+  ASSERT_EQ(
+      json::Get<JsonBoolean>(j["left_child"]).GetBoolean(), true);
+  ASSERT_EQ(
+      json::Get<JsonBoolean>(j["right_child"]).GetBoolean(), false);
+}
+
+TEST(Json, Indexing) {
   std::stringstream ss(GetModelStr());
   Json j {json::Json::Load(&ss)};
 
@@ -215,25 +211,10 @@ bool TestIndexing() {
   auto& value = value_1["base_score"];
   std::string result = Cast<JsonString>(&value.GetValue())->GetString();
 
-  return result == "0.5";
+  ASSERT_EQ(result, "0.5");
 }
 
-bool TestLoadDump() {
-  std::stringstream ss(GetModelStr());
-  Json j {json::Json::Load(&ss)};
-
-  std::string dump_path = "/tmp/dump-model.json";
-  std::ofstream fout (dump_path, std::ios_base::out);
-  Json::Dump(j, &fout);
-  fout.close();
-
-  std::ifstream fin (dump_path);
-  std::string dump_str = {std::istreambuf_iterator<char>(fin), {}};
-  fin.close();
-  return GetModelStr() == dump_str;
-}
-
-bool TestAssigningObjects() {
+TEST(Json, AssigningObjects) {
   bool result = true;
 
   {
@@ -265,19 +246,10 @@ bool TestAssigningObjects() {
         result &&
         Get<JsonString>(json_object["1"]).GetString() == "1" ? true : false;
   }
-
-  return result;
 }
 
-int main(int argc, char * const argv[]) {
-  TEST(TestParseObject);
-  TEST(TestParseNumber);
-  TEST(TestParseArray);
-  TEST(TestEmptyArray);
-
-  TEST(TestIndexing);
-
-  // TEST(TestLoadDump);
-
-  TEST(TestAssigningObjects);
+int main(int argc, char ** argv) {
+  testing::InitGoogleTest(&argc, argv);
+  testing::FLAGS_gtest_death_test_style = "threadsafe";
+  return RUN_ALL_TESTS();
 }
