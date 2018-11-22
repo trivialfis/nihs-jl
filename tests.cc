@@ -263,6 +263,21 @@ TEST(Json, LoadDump) {
   ASSERT_EQ(load_back, origin);
 }
 
+// For now Json is quite ignorance about unicode.
+TEST(Json, CopyUnicode) {
+  std::string json_str = R"json(
+{"m": ["\ud834\udd1e", "\u20ac", "\u0416", "\u00f6"]}
+)json";
+  std::stringstream ss_0(json_str);
+  Json loaded {json::Json::Load(&ss_0)};
+
+  std::stringstream ss_1;
+  Json::Dump(loaded, &ss_1);
+
+  std::string dumped_string = ss_1.str();
+  ASSERT_NE(dumped_string.find("\\u20ac"), std::string::npos);
+}
+
 int main(int argc, char ** argv) {
   testing::InitGoogleTest(&argc, argv);
   testing::FLAGS_gtest_death_test_style = "threadsafe";

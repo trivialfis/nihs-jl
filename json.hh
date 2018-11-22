@@ -237,6 +237,9 @@ class JsonBoolean : public Value {
 /*!
  * \brief Data structure representing JSON format.
  *
+ * Limitation:  UTF-8 is not properly supported.  Code points above ASCII are
+ *              invalid.
+ *
  * Examples:
  *
  * \code

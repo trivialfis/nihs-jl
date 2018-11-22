@@ -1,3 +1,5 @@
+#include <locale>
+
 #include "json.hh"
 
 namespace json {
@@ -8,12 +10,19 @@ class JsonWriter {
   size_t n_spaces_;
   std::ostream* stream_;
 
+  std::locale original_locale;
+
  public:
-  JsonWriter(std::ostream* stream) : n_spaces_{0}, stream_{stream} {}
-  ~JsonWriter() = default;
+  JsonWriter(std::ostream* stream) : n_spaces_{0}, stream_{stream} {
+    original_locale = std::locale("");
+    stream_->imbue(std::locale("en_US.UTF-8"));
+  }
+  ~JsonWriter() {
+    stream_->imbue(original_locale);
+  }
 
   void NewLine() {
-    *stream_ << "\n" << std::string(n_spaces_, ' ');
+    *stream_ << u8"\n" << std::string(n_spaces_, ' ');
   }
 
   void BeginIndent() {
@@ -61,6 +70,7 @@ class JsonReader {
 
   std::string raw_str_;
 
+ private:
   void SkipSpaces();
 
   char GetNextChar() {
@@ -91,24 +101,10 @@ class JsonReader {
     return result;
   }
 
-  Json Error() const {
-    std::istringstream str_s(raw_str_);
-
-    std::string line;
-    int line_count = 0;
-    while (std::getline(str_s, line) && line_count < cursor_.Line()) {
-      line_count++;
-    }
-    std::cerr << line << std::endl;
-    std::string spaces (cursor_.Col(), ' ');
-    std::cerr << spaces << '^' << std::endl;
-    return Json();
-  }
-
   void Error(std::string msg) const {
     std::istringstream str_s(raw_str_);
 
-    msg += "\nAt ("
+    msg += ", at ("
            + std::to_string(cursor_.Line()) + ", "
            + std::to_string(cursor_.Col()) + ")\n";
     std::string line;
@@ -129,22 +125,6 @@ class JsonReader {
     msg += std::to_string(c)
            + "\", got: \"" + raw_str_[cursor_.Pos()-1] + "\"\n"; // FIXME
     Error(msg);
-  }
-
-  // FIXME: Maybe remove this.
-  // Report expected set of possibile characters
-  void Expect(std::vector<char> expectations) {
-    std::stringstream strstream;
-    strstream << "\nAt ("
-              << cursor_.Line() << ", "
-              << cursor_.Col() << ")";
-    strstream << ", Expecting: ";
-    for (auto c : expectations) {
-      strstream << '\"' << c << "\" or ";
-    }
-    strstream << "\", got: \"" << raw_str_[cursor_.Pos()] << "\""
-              << std::endl;
-    Error(strstream.str());
   }
 
   Json ParseString();
@@ -170,20 +150,32 @@ class JsonReader {
       } else if ( c == 't' || c == 'f') {
         return ParseBoolean();
       } else {
-        Error("Unknow construct.");
+        Error("Unknown construct");
       }
     }
     return Json();
   }
 
+ private:
+  std::locale original_locale_;
+  std::istream* stream_;
+
  public:
-  JsonReader() = default;
-  ~JsonReader() = default;
+  JsonReader(std::istream* stream) {
+    original_locale_ = std::locale("");
+    stream_ = stream;
+    stream->imbue(std::locale("en_US.UTF-8"));
+  }
+  ~JsonReader(){
+    stream_->imbue(original_locale_);
+  }
 
-  Json Load(std::istream* stream) {
-    raw_str_ = {std::istreambuf_iterator<char>(*stream), {}};
-
-    return Parse();
+  Json Load() {
+    stream_->imbue(std::locale("en_US.UTF-8"));
+    raw_str_ = {std::istreambuf_iterator<char>(*stream_), {}};
+    Json result = Parse();
+    stream_->imbue(original_locale_);
+    return result;
   }
 };
 
@@ -272,13 +264,15 @@ bool JsonString::operator==(Value const& rhs) const {
   return Cast<JsonString const>(&rhs)->GetString() == str_;
 }
 
+// FIXME: UTF-8 parsing support.
 void JsonString::Save(JsonWriter* writer) {
   std::string buffer;
   buffer += '"';
   for (size_t i = 0; i < str_.length(); i++) {
     const char ch = str_[i];
     if (ch == '\\') {
-      buffer += "\\\\";
+      if (i < str_.size() && str_[i+1] == 'u') buffer += "\\";
+      else buffer += "\\\\";
     } else if (ch == '"') {
       buffer += "\\\"";
     } else if (ch == '\b') {
@@ -292,17 +286,10 @@ void JsonString::Save(JsonWriter* writer) {
     } else if (ch == '\t') {
       buffer += "\\t";
     } else if (static_cast<uint8_t>(ch) <= 0x1f) {
+      // Unit separator
       char buf[8];
       snprintf(buf, sizeof buf, "\\u%04x", ch);
       buffer += buf;
-    } else if (static_cast<uint8_t>(ch) == 0xe2 && static_cast<uint8_t>(str_[i+1]) == 0x80
-               && static_cast<uint8_t>(str_[i+2]) == 0xa8) {
-      buffer += "\\u2028";
-      i += 2;
-    } else if (static_cast<uint8_t>(ch) == 0xe2 && static_cast<uint8_t>(str_[i+1]) == 0x80
-               && static_cast<uint8_t>(str_[i+2]) == 0xa9) {
-      buffer += "\\u2029";
-      i += 2;
     } else {
       buffer += ch;
     }
@@ -442,7 +429,11 @@ Json JsonReader::ParseString() {
         case '\\': str += u8"\\"; break;
         case 't':  str += u8"\t"; break;
         case '\"': str += u8"\""; break;
-        default: Error();
+        case 'u':
+          str += ch;
+          str += 'u';
+          break;
+        default: Error("Unknown escape");
       }
     } else {
       if (ch == '\"') break;
@@ -548,9 +539,9 @@ Json JsonReader::ParseBoolean() {
 }
 
 Json Json::Load(std::istream* stream) {
-  JsonReader reader;
+  JsonReader reader(stream);
   try {
-    Json json{reader.Load(stream)};
+    Json json{reader.Load()};
     return json;
   } catch (std::runtime_error const& e) {
     std::cerr << e.what();
