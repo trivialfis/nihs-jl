@@ -215,11 +215,17 @@ Json& DummyJsonObject () {
   return obj;
 }
 
+// object
 Json& JsonObject::operator[](int ind) {
   throw std::runtime_error(
       "Object of type " +
       Value::TypeStr() + " can not be indexed by Integer.");
   return DummyJsonObject();
+}
+
+bool JsonObject::operator==(Value const& rhs) const {
+  if(!IsA<JsonObject>(&rhs)) { return false; }
+  return object_ == Cast<JsonObject const>(&rhs)->GetObject();
 }
 
 void JsonObject::Save(JsonWriter* writer) {
@@ -259,6 +265,11 @@ Json& JsonString::operator[](int ind) {
       Value::TypeStr() + " can not be indexed by Integer, " +
       "please try obtaining std::string first.");
   return DummyJsonObject();
+}
+
+bool JsonString::operator==(Value const& rhs) const {
+  if (!IsA<JsonString>(&rhs)) { return false; }
+  return Cast<JsonString const>(&rhs)->GetString() == str_;
 }
 
 void JsonString::Save(JsonWriter* writer) {
@@ -312,6 +323,12 @@ Json& JsonArray::operator[](int ind) {
   return vec_.at(ind);
 }
 
+bool JsonArray::operator==(Value const& rhs) const {
+  if (!IsA<JsonArray>(&rhs)) { return false; }
+  auto& arr = Cast<JsonArray const>(&rhs)->GetArray();
+  return std::equal(arr.cbegin(), arr.cend(), vec_.cbegin());
+}
+
 void JsonArray::Save(JsonWriter* writer) {
   writer->Write("[");
   size_t size = vec_.size();
@@ -338,8 +355,13 @@ Json& JsonNumber::operator[](int ind) {
   return DummyJsonObject();
 }
 
+bool JsonNumber::operator==(Value const& rhs) const {
+  if(!IsA<JsonNumber>(&rhs)) { return false; }
+  return number_ == Cast<JsonNumber const>(&rhs)->GetNumber();
+}
+
 void JsonNumber::Save(JsonWriter* writer) {
-  writer->Write(std::to_string(this->GetDouble()));
+  writer->Write(std::to_string(this->GetNumber()));
 }
 
 // Json Null
@@ -357,6 +379,11 @@ Json& JsonNull::operator[](int ind) {
   return DummyJsonObject();
 }
 
+bool JsonNull::operator==(Value const& rhs) const {
+  if(!IsA<JsonNull>(&rhs)) { return false; }
+  return true;
+}
+
 void JsonNull::Save(JsonWriter* writer) {
   writer->Write("null");
 }
@@ -368,6 +395,7 @@ Json& JsonBoolean::operator[](std::string const & key) {
       Value::TypeStr() + " can not be indexed by string.");
   return DummyJsonObject();
 }
+
 Json& JsonBoolean::operator[](int ind) {
   throw std::runtime_error(
       "Object of type " +
@@ -375,11 +403,16 @@ Json& JsonBoolean::operator[](int ind) {
   return DummyJsonObject();
 }
 
+bool JsonBoolean::operator==(Value const& rhs) const {
+  if(!IsA<JsonBoolean>(&rhs)) { return false; }
+  return boolean_ == Cast<JsonBoolean const>(&rhs)->GetBoolean();
+}
+
 void JsonBoolean::Save(JsonWriter *writer) {
   if (boolean_) {
-    writer->Write("true");
+    writer->Write(u8"true");
   } else {
-    writer->Write("false");
+    writer->Write(u8"false");
   }
 }
 
@@ -404,11 +437,11 @@ Json JsonReader::ParseString() {
     if (ch == '\\') {
       char next = static_cast<char>(GetNextChar());
       switch (next) {
-        case 'r': str += "\r"; break;
-        case 'n': str += "\n"; break;
-        case '\\': str += "\\"; break;
-        case 't': str += "\t"; break;
-        case '\"': str += "\"";; break;
+        case 'r':  str += u8"\r"; break;
+        case 'n':  str += u8"\n"; break;
+        case '\\': str += u8"\\"; break;
+        case 't':  str += u8"\t"; break;
+        case '\"': str += u8"\""; break;
         default: Error();
       }
     } else {

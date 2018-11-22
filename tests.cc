@@ -173,7 +173,12 @@ TEST(Json, ParseArray) {
 }
 )json";
   std::istringstream iss(str);
-  json::Json::Load(&iss);
+  auto json = json::Json::Load(&iss);
+  json = json["nodes"];
+  auto arr = Get<JsonArray>(json).GetArray();
+  ASSERT_EQ(arr.size(), 3);
+  auto v0 = arr[0];
+  ASSERT_EQ(Get<JsonNumber>(v0["depth"]).GetNumber(), 3);
 }
 
 TEST(Json, EmptyArray) {
@@ -215,13 +220,11 @@ TEST(Json, Indexing) {
 }
 
 TEST(Json, AssigningObjects) {
-  bool result = true;
-
   {
     Json json;
     json = JsonObject();
-    json["ok"] = std::string("Not ok");
-    json["no ok"] = JsonArray();
+    json["Okay"] = JsonArray();
+    ASSERT_EQ(Get<JsonArray>(json["Okay"]).GetArray().size(), 0);
   }
 
   {
@@ -230,8 +233,7 @@ TEST(Json, AssigningObjects) {
     std::vector<Json> arr_0 (1, Json(3.3));
     json_objects["tree_parameters"] = JsonArray(arr_0);
     std::vector<Json> json_arr = Get<JsonArray>(json_objects["tree_parameters"]).GetArray();
-    result = Get<JsonNumber>(json_arr[0]).GetDouble() == 3.3;
-    auto arr_1 = *Cast<JsonArray>(&json_objects["tree_parameters"].GetValue());
+    ASSERT_EQ(Get<JsonNumber>(json_arr[0]).GetNumber(), 3.3);
   }
 
   {
@@ -241,11 +243,24 @@ TEST(Json, AssigningObjects) {
     k  = str;
     auto& m = json_object["1"];
     std::string value = Get<JsonString>(m).GetString();
-    result = result && value == "1";
-    result =
-        result &&
-        Get<JsonString>(json_object["1"]).GetString() == "1" ? true : false;
+    ASSERT_EQ(value, "1");
+    ASSERT_EQ(Get<JsonString>(json_object["1"]).GetString(), "1");
   }
+}
+
+TEST(Json, LoadDump) {
+  std::stringstream ss(GetModelStr());
+  Json origin {json::Json::Load(&ss)};
+
+  std::ofstream fout ("/tmp/model_dump.json");
+  json::Json::Dump(origin, &fout);
+  fout.close();
+
+  std::ifstream fin ("/tmp/model_dump.json");
+  Json load_back {json::Json::Load(&fin)};
+  fin.close();
+
+  ASSERT_EQ(load_back, origin);
 }
 
 int main(int argc, char ** argv) {

@@ -77,16 +77,18 @@ class Value {
   virtual Json& operator[](std::string const & key) = 0;
   virtual Json& operator[](int ind) = 0;
 
+  virtual bool operator==(Value const& rhs) const = 0;
+
   std::string TypeStr() const;
 };
 
 template <typename T>
-bool IsA(Value* value) {
+bool IsA(Value const* value) {
   return T::IsClassOf(value);
 }
 
-template <typename T>
-T* Cast(Value* value) {
+template <typename T, typename U>
+T* Cast(U* value) {
   if (IsA<T>(value)) {
     return dynamic_cast<T*>(value);
   } else {
@@ -112,7 +114,9 @@ class JsonString : public Value {
   std::string const& GetString() const { return str_; }
   std::string & GetString() { return str_;}
 
-  static bool IsClassOf(Value* value) {
+  virtual bool operator==(Value const& rhs) const;
+
+  static bool IsClassOf(Value const* value) {
     return value->Type() == ValueKind::String;
   }
 };
@@ -134,7 +138,9 @@ class JsonArray : public Value {
   std::vector<Json> const& GetArray() const { return vec_; }
   std::vector<Json> & GetArray() { return vec_; }
 
-  static bool IsClassOf(Value* value) {
+  virtual bool operator==(Value const& rhs) const;
+
+  static bool IsClassOf(Value const* value) {
     return value->Type() == ValueKind::Array;
   }
 };
@@ -154,7 +160,9 @@ class JsonObject : public Value {
   std::map<std::string, Json> const& GetObject() const { return object_; }
   std::map<std::string, Json> &      GetObject() { return object_; }
 
-  static bool IsClassOf(Value* value) {
+  virtual bool operator==(Value const& rhs) const;
+
+  static bool IsClassOf(Value const* value) {
     return value->Type() == ValueKind::Object;
   }
 };
@@ -168,8 +176,6 @@ class JsonNumber : public Value {
     number_ = value;
   }
 
-  double GetDouble() const { return number_; }
-
   virtual void Save(JsonWriter* stream);
 
   virtual Json& operator[](std::string const & key);
@@ -177,7 +183,9 @@ class JsonNumber : public Value {
 
   double GetNumber() const { return number_; }
 
-  static bool IsClassOf(Value* value) {
+  virtual bool operator==(Value const& rhs) const;
+
+  static bool IsClassOf(Value const* value) {
     return value->Type() == ValueKind::Number;
   }
 };
@@ -192,7 +200,9 @@ class JsonNull : public Value {
   virtual Json& operator[](std::string const & key);
   virtual Json& operator[](int ind);
 
-  static bool IsClassOf(Value* value) {
+  virtual bool operator==(Value const& rhs) const;
+
+  static bool IsClassOf(Value const* value) {
     return value->Type() == ValueKind::Null;
   }
 };
@@ -215,15 +225,28 @@ class JsonBoolean : public Value {
   virtual Json& operator[](std::string const & key);
   virtual Json& operator[](int ind);
 
-  bool GetBoolean() { return boolean_; }
+  bool GetBoolean() const { return boolean_; }
 
-  static bool IsClassOf(Value* value) {
+  virtual bool operator==(Value const& rhs) const;
+
+  static bool IsClassOf(Value const* value) {
     return value->Type() == ValueKind::Boolean;
   }
 };
 
 /*!
  * \brief Data structure representing JSON format.
+ *
+ * Examples:
+ *
+ * \code
+ *   // Create a JSON object.
+ *   json::Json object = json::Object();
+ *   // Assign key "key" with a JSON string "Value";
+ *   object["key"] = Json::String("Value");
+ *   // Assign key "arr" with a empty JSON Array;
+ *   object["arr"] = Json::Array();
+ * \endcode
  */
 class Json {
   friend JsonWriter;
@@ -302,6 +325,10 @@ class Json {
   /*! \Brief Return the reference to stored Json value. */
   Value& GetValue() { return *ptr_; }
 
+  bool operator==(Json const& rhs) const {
+    return *ptr_ == *(rhs.ptr_);
+  }
+
  private:
   std::shared_ptr<Value> ptr_;
 };
@@ -314,10 +341,18 @@ class Json {
  * \param json
  * \return Json value with type T.
  */
-template <typename T>
-T Get(Json json) {
+template <typename T, typename U>
+T Get(U json) {
   auto value = *Cast<T>(&json.GetValue());
   return value;
 }
+
+using Object = JsonObject;
+using Array = JsonArray;
+using Number = JsonNumber;
+using Boolean = JsonBoolean;
+using String = JsonString;
+using Null = JsonNull;
+
 }      // namespace json
 #endif  // JSON_HH_
