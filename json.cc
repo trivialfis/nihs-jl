@@ -108,6 +108,9 @@ class JsonReader {
   void Error(std::string msg) const {
     std::istringstream str_s(raw_str_);
 
+    msg += "\nAt ("
+           + std::to_string(cursor_.Line()) + ", "
+           + std::to_string(cursor_.Col()) + ")\n";
     std::string line;
     int line_count = 0;
     while (std::getline(str_s, line) && line_count < cursor_.Line()) {
@@ -122,11 +125,9 @@ class JsonReader {
 
   // Report expected character
   void Expect(char c) {
-    std::string msg = "\nAt ("
-                      + std::to_string(cursor_.Line()) + ", "
-                      + std::to_string(cursor_.Col()) + ")"
-                      + ", Expecting: \"" + c
-                      + "\", got: \"" + raw_str_[cursor_.Pos()-1] + "\"\n"; // FIXME
+    std::string msg = "Expecting: \"";
+    msg += std::to_string(c)
+           + "\", got: \"" + raw_str_[cursor_.Pos()-1] + "\"\n"; // FIXME
     Error(msg);
   }
 
@@ -150,6 +151,7 @@ class JsonReader {
   Json ParseObject();
   Json ParseArray();
   Json ParseNumber();
+  Json ParseBoolean();
 
   Json Parse() {
     while (true) {
@@ -158,18 +160,20 @@ class JsonReader {
       if (c == -1) { break; }
 
       if (c == '{') {
-        return std::move(ParseObject());
+        return ParseObject();
       } else if ( c == '[' ) {
-        return std::move(ParseArray());
+        return ParseArray();
       } else if ( c == '-' || std::isdigit(c)) {
-        return std::move(ParseNumber());
+        return ParseNumber();
       } else if ( c == '\"' ) {
-        return std::move(ParseString());
+        return ParseString();
+      } else if ( c == 't' || c == 'f') {
+        return ParseBoolean();
       } else {
         Error("Unknow construct.");
       }
     }
-    return std::move(Json());
+    return Json();
   }
 
  public:
@@ -415,7 +419,7 @@ Json JsonReader::ParseString() {
       Expect('\"');
     }
   }
-  return std::move(Json(std::move(str)));
+  return Json(std::move(str));
 }
 
 Json JsonReader::ParseArray() {
@@ -425,7 +429,7 @@ Json JsonReader::ParseArray() {
   while (true) {
     if (PeekNextChar() == ']') {
       GetChar(']');
-      return std::move(Json(std::move(data)));
+      return Json(std::move(data));
     }
     auto obj = Parse();
     data.push_back(obj);
@@ -436,14 +440,14 @@ Json JsonReader::ParseArray() {
     }
   }
 
-  return std::move(Json(std::move(data)));
+  return Json(std::move(data));
 }
 
 Json JsonReader::ParseObject() {
   char ch = GetChar('{');
 
   std::map<std::string, Json> data;
-  if (ch == '}') return std::move(Json(std::move(data)));
+  if (ch == '}') return Json(std::move(data));
 
   while(true) {
     SkipSpaces();
@@ -459,7 +463,7 @@ Json JsonReader::ParseObject() {
       Expect(':');
     }
 
-    Json value {std::move(Parse())};
+    Json value {Parse()};
     data[Cast<JsonString>(&(key.GetValue()))->GetString()] = std::move(value);
 
     ch = GetNextNonSpaceChar();
@@ -470,7 +474,7 @@ Json JsonReader::ParseObject() {
     }
   }
 
-  return std::move(Json(std::move(data)));
+  return Json(std::move(data));
 }
 
 Json JsonReader::ParseNumber() {
@@ -480,17 +484,44 @@ Json JsonReader::ParseNumber() {
   for (size_t i = 0; i < pos; ++i) {
     GetNextChar();
   }
-  return std::move(Json(number));
+  return Json(number);
+}
+
+Json JsonReader::ParseBoolean() {
+  bool result = false;
+  char ch = GetNextNonSpaceChar();
+  std::string const t_value = u8"true";
+  std::string const f_value = u8"false";
+  std::string buffer;
+
+  if (ch == 't') {
+    for (size_t i = 0; i < 3; ++i) {
+      buffer.push_back(GetNextNonSpaceChar());
+    }
+    if (buffer != u8"rue") {
+      Error("Expecting boolean value \"true\".");
+    }
+    result = true;
+  } else {
+    for (size_t i = 0; i < 4; ++i) {
+      buffer.push_back(GetNextNonSpaceChar());
+    }
+    if (buffer != u8"alse") {
+      Error("Expecting boolean value \"false\".");
+    }
+    result = false;
+  }
+  return Json{JsonBoolean{result}};
 }
 
 Json Json::Load(std::istream* stream) {
   JsonReader reader;
   try {
-    Json json{std::move(reader.Load(stream))};
-    return std::move(json);
+    Json json{reader.Load(stream)};
+    return json;
   } catch (std::runtime_error const& e) {
     std::cerr << e.what();
-    return std::move(Json());
+    return Json();
   }
 }
 

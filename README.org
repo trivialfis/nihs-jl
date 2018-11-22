@@ -3,7 +3,7 @@
 WIP JSON implementation for /XGBoost/.
 
 * TODOs
-  [ ] More tests.
-  [ ] Simple documentation.
-  [ ] Handle UTF-8 properly.
-  [ ] Integration with /XGBoost/.
+  - [ ] More tests.
+  - [ ] Simple documentation.
+  - [ ] Handle UTF-8 properly.
+  - [ ] Integration with /XGBoost/.
