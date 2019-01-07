@@ -192,6 +192,13 @@ std::string Value::TypeStr() const {
   return "";
 }
 
+// Only used for keeping old compilers happy about non-reaching return
+// statement.
+Json& DummyJsonObject () {
+  static Json obj;
+  return obj;
+}
+
 // Json Object
 JsonObject::JsonObject(std::map<std::string, Json> object)
     : Value(ValueKind::Object), object_{std::move(object)} {}
@@ -200,14 +207,6 @@ Json& JsonObject::operator[](std::string const & key) {
   return object_[key];
 }
 
-// Only used for keeping old compilers happy about non-reaching return
-// statement.
-Json& DummyJsonObject () {
-  static Json obj;
-  return obj;
-}
-
-// object
 Json& JsonObject::operator[](int ind) {
   throw std::runtime_error(
       "Object of type " +
@@ -218,6 +217,12 @@ Json& JsonObject::operator[](int ind) {
 bool JsonObject::operator==(Value const& rhs) const {
   if(!IsA<JsonObject>(&rhs)) { return false; }
   return object_ == Cast<JsonObject const>(&rhs)->GetObject();
+}
+
+Value & JsonObject::operator=(Value const &rhs) {
+  JsonObject const* casted = Cast<JsonObject const>(&rhs);
+  object_ = casted->GetObject();
+  return *this;
 }
 
 void JsonObject::Save(JsonWriter* writer) {
@@ -262,6 +267,12 @@ Json& JsonString::operator[](int ind) {
 bool JsonString::operator==(Value const& rhs) const {
   if (!IsA<JsonString>(&rhs)) { return false; }
   return Cast<JsonString const>(&rhs)->GetString() == str_;
+}
+
+Value & JsonString::operator=(Value const &rhs) {
+  JsonString const* casted = Cast<JsonString const>(&rhs);
+  str_ = casted->GetString();
+  return *this;
 }
 
 // FIXME: UTF-8 parsing support.
@@ -316,6 +327,12 @@ bool JsonArray::operator==(Value const& rhs) const {
   return std::equal(arr.cbegin(), arr.cend(), vec_.cbegin());
 }
 
+Value & JsonArray::operator=(Value const &rhs) {
+  JsonArray const* casted = Cast<JsonArray const>(&rhs);
+  vec_ = casted->GetArray();
+  return *this;
+}
+
 void JsonArray::Save(JsonWriter* writer) {
   writer->Write("[");
   size_t size = vec_.size();
@@ -347,6 +364,12 @@ bool JsonNumber::operator==(Value const& rhs) const {
   return number_ == Cast<JsonNumber const>(&rhs)->GetNumber();
 }
 
+Value & JsonNumber::operator=(Value const &rhs) {
+  JsonNumber const* casted = Cast<JsonNumber const>(&rhs);
+  number_ = casted->GetNumber();
+  return *this;
+}
+
 void JsonNumber::Save(JsonWriter* writer) {
   writer->Write(std::to_string(this->GetNumber()));
 }
@@ -371,6 +394,11 @@ bool JsonNull::operator==(Value const& rhs) const {
   return true;
 }
 
+Value & JsonNull::operator=(Value const &rhs) {
+  Cast<JsonNull const>(&rhs);  // Checking only.
+  return *this;
+}
+
 void JsonNull::Save(JsonWriter* writer) {
   writer->Write("null");
 }
@@ -393,6 +421,12 @@ Json& JsonBoolean::operator[](int ind) {
 bool JsonBoolean::operator==(Value const& rhs) const {
   if(!IsA<JsonBoolean>(&rhs)) { return false; }
   return boolean_ == Cast<JsonBoolean const>(&rhs)->GetBoolean();
+}
+
+Value & JsonBoolean::operator=(Value const &rhs) {
+  JsonBoolean const* casted = Cast<JsonBoolean const>(&rhs);
+  boolean_ = casted->GetBoolean();
+  return *this;
 }
 
 void JsonBoolean::Save(JsonWriter *writer) {
@@ -558,4 +592,30 @@ void Json::Dump(Json json, std::ostream *stream) {
   }
 }
 
+Json& Json::operator=(Json const &other) {
+  auto type = other.GetValue().Type();
+  switch (type) {
+  case Value::ValueKind::Array:
+    ptr_.reset(new JsonArray(*Cast<JsonArray const>(&other.GetValue())));
+    break;
+  case Value::ValueKind::Boolean:
+    ptr_.reset(new JsonBoolean(*Cast<JsonBoolean const>(&other.GetValue())));
+    break;
+  case Value::ValueKind::Null:
+    ptr_.reset(new JsonNull(*Cast<JsonNull const>(&other.GetValue())));
+    break;
+  case Value::ValueKind::Number:
+    ptr_.reset(new JsonNumber(*Cast<JsonNumber const>(&other.GetValue())));
+    break;
+  case Value::ValueKind::Object:
+    ptr_.reset(new JsonObject(*Cast<JsonObject const>(&other.GetValue())));
+    break;
+  case Value::ValueKind::String:
+    ptr_.reset(new JsonString(*Cast<JsonString const>(&other.GetValue())));
+    break;
+  default:
+    throw std::runtime_error("Unknown value kind.");
+  }
+  return *this;
+}
 }  // namespace json

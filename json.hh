@@ -6,20 +6,6 @@
   std::cout << __FILE__ << ", " << __LINE__ << ": "     \
   << CONTENT << '|' << std::endl;                       \
 
-/*!
- * \brief Unicode
- *
- * [ U+005B left square bracket
- * { U+007B left curly bracket
- * ] U+005D right square bracket
- * } U+007D right curly bracket
- * : U+003A colon
- * , U+002C comma
- *
- * true  U+0074 U+0072 U+0075 U+0065
- * false U+0066 U+0061 U+006C U+0073 U+0065
- * null  U+006E U+0075 U+006C U+006C
- */
 #include <iostream>
 #include <istream>
 #include <string>
@@ -52,7 +38,7 @@ class Json;
 class JsonWriter;
 
 class Value {
- protected:
+ public:
   /*!\brief Simplified implementation of LLVM RTTI. */
   enum class ValueKind {
     String,
@@ -63,10 +49,6 @@ class Value {
     Null
   };
 
- private:
-  ValueKind kind_;
-
- public:
   Value(ValueKind _kind) : kind_{_kind} {}
 
   ValueKind Type() const { return kind_; }
@@ -78,8 +60,12 @@ class Value {
   virtual Json& operator[](int ind) = 0;
 
   virtual bool operator==(Value const& rhs) const = 0;
+  virtual Value& operator=(Value const& rhs) = 0;
 
   std::string TypeStr() const;
+
+ private:
+  ValueKind kind_;
 };
 
 template <typename T>
@@ -115,6 +101,7 @@ class JsonString : public Value {
   std::string & GetString() { return str_;}
 
   virtual bool operator==(Value const& rhs) const;
+  virtual Value& operator=(Value const& rhs);
 
   static bool IsClassOf(Value const* value) {
     return value->Type() == ValueKind::String;
@@ -123,6 +110,7 @@ class JsonString : public Value {
 
 class JsonArray : public Value {
   std::vector<Json> vec_;
+
  public:
   JsonArray() : Value(ValueKind::Array) {}
   JsonArray(std::vector<Json>&& arr) :
@@ -139,6 +127,7 @@ class JsonArray : public Value {
   std::vector<Json> & GetArray() { return vec_; }
 
   virtual bool operator==(Value const& rhs) const;
+  virtual Value& operator=(Value const& rhs);
 
   static bool IsClassOf(Value const* value) {
     return value->Type() == ValueKind::Array;
@@ -161,6 +150,7 @@ class JsonObject : public Value {
   std::map<std::string, Json> &      GetObject() { return object_; }
 
   virtual bool operator==(Value const& rhs) const;
+  virtual Value& operator=(Value const& rhs);
 
   static bool IsClassOf(Value const* value) {
     return value->Type() == ValueKind::Object;
@@ -184,6 +174,7 @@ class JsonNumber : public Value {
   double GetNumber() const { return number_; }
 
   virtual bool operator==(Value const& rhs) const;
+  virtual Value& operator=(Value const& rhs);
 
   static bool IsClassOf(Value const* value) {
     return value->Type() == ValueKind::Number;
@@ -201,6 +192,7 @@ class JsonNull : public Value {
   virtual Json& operator[](int ind);
 
   virtual bool operator==(Value const& rhs) const;
+  virtual Value& operator=(Value const& rhs);
 
   static bool IsClassOf(Value const* value) {
     return value->Type() == ValueKind::Null;
@@ -228,6 +220,7 @@ class JsonBoolean : public Value {
   bool GetBoolean() const { return boolean_; }
 
   virtual bool operator==(Value const& rhs) const;
+  virtual Value& operator=(Value const& rhs);
 
   static bool IsClassOf(Value const* value) {
     return value->Type() == ValueKind::Boolean;
@@ -309,10 +302,7 @@ class Json {
 
   // copy
   Json(Json const& other) : ptr_{other.ptr_} {}
-  Json& operator=(Json const& other) {
-    ptr_ = other.ptr_;
-    return *this;
-  }
+  Json& operator=(Json const& other);
   // move
   Json(Json&& other) : ptr_{std::move(other.ptr_)} {}
   Json& operator=(Json&& other) {
@@ -327,6 +317,7 @@ class Json {
 
   /*! \Brief Return the reference to stored Json value. */
   Value& GetValue() { return *ptr_; }
+  Value const& GetValue() const {return *ptr_;}
 
   bool operator==(Json const& rhs) const {
     return *ptr_ == *(rhs.ptr_);
