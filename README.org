@@ -1,6 +1,6 @@
 #+TITLE: Not Invented Here Syndrome - JSON Library
 
-WIP JSON implementation for /XGBoost/.
+WIP JSON implementation originally created for /XGBoost/.
 
 * TODOs
   - [ ] More tests.
